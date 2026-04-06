@@ -5,7 +5,6 @@ import sqlite3
 import time
 import requests
 
-# ===== НАСТРОЙКИ =====
 BOT_TOKEN = "8466184183:AAHRlZuZuCJTTN8ScpsH3G9jBymnHQNifgU"
 
 app = Flask(__name__)
@@ -22,6 +21,7 @@ def init_db():
             lon REAL,
             type TEXT,
             content TEXT,
+            address TEXT,
             timestamp INTEGER
         )
     """)
@@ -30,21 +30,40 @@ def init_db():
 
 init_db()
 
+# ===== ПОЛУЧЕНИЕ АДРЕСА =====
+def get_address(lat, lon):
+    try:
+        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}"
+        headers = {"User-Agent": "map-app"}
+        res = requests.get(url, headers=headers).json()
+
+        address = res.get("display_name", "Адрес не найден")
+        return address
+
+    except:
+        return "Адрес не найден"
+
 # ===== ДОБАВЛЕНИЕ ТОЧКИ =====
 @app.route("/add", methods=["POST"])
 def add_point():
     data = request.json
 
+    lat = data["lat"]
+    lon = data["lon"]
+
+    address = get_address(lat, lon)
+
     conn = sqlite3.connect("db.db")
     c = conn.cursor()
     c.execute("""
-        INSERT INTO points (lat, lon, type, content, timestamp)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO points (lat, lon, type, content, address, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?)
     """, (
-        data["lat"],
-        data["lon"],
+        lat,
+        lon,
         data["type"],
         data.get("content", ""),
+        address,
         int(time.time())
     ))
     conn.commit()
@@ -56,7 +75,7 @@ def add_point():
 @app.route("/points")
 def get_points():
     now = int(time.time())
-    limit = now - 1200  # 20 минут
+    limit = now - 1200
 
     conn = sqlite3.connect("db.db")
     c = conn.cursor()
@@ -69,21 +88,21 @@ def get_points():
         for r in rows
     ])
 
-# ===== ОДНА ТОЧКА (С ФОТО) =====
+# ===== ОДНА ТОЧКА =====
 @app.route("/point/<int:pid>")
 def get_point(pid):
     conn = sqlite3.connect("db.db")
     c = conn.cursor()
-    c.execute("SELECT content FROM points WHERE id = ?", (pid,))
+    c.execute("SELECT content, address FROM points WHERE id = ?", (pid,))
     row = c.fetchone()
     conn.close()
 
     if not row:
         return jsonify({})
 
-    content = row[0]
+    content, address = row
 
-    # если это file_id Telegram
+    # фото
     if content and content.startswith("AgAC"):
         try:
             file = requests.get(
@@ -95,15 +114,18 @@ def get_point(pid):
 
             return jsonify({
                 "content": content,
-                "file_url": file_url
+                "file_url": file_url,
+                "address": address
             })
-
         except:
-            return jsonify({"content": content})
+            pass
 
-    return jsonify({"content": content})
+    return jsonify({
+        "content": content,
+        "address": address
+    })
 
-# ===== ЗАПУСК ДЛЯ RENDER =====
+# ===== ЗАПУСК =====
 if __name__ == "__main__":
     PORT = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=PORT)
