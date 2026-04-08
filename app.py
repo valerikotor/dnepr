@@ -8,7 +8,6 @@ import requests
 # ===== НАСТРОЙКИ =====
 BOT_TOKEN = "8466184183:AAHRlZuZuCJTTN8ScpsH3G9jBymnHQNifgU"
 
-# авто режим
 AUTO_DELETE = True
 AUTO_DELETE_TIME = 1200  # 20 минут
 
@@ -105,15 +104,37 @@ def get_points():
 def get_point(pid):
     conn = sqlite3.connect("db.db")
     c = conn.cursor()
-    c.execute("SELECT content, address FROM points WHERE id = ?", (pid,))
+    c.execute("SELECT content, address, timestamp FROM points WHERE id = ?", (pid,))
     row = c.fetchone()
     conn.close()
 
     if not row:
         return jsonify({})
 
-    content, address = row
+    content, address, timestamp = row
 
+    # ===== ФОТО + ТЕКСТ =====
+    if content and "|" in content:
+        try:
+            file_id, text = content.split("|", 1)
+
+            file = requests.get(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}"
+            ).json()
+
+            file_path = file["result"]["file_path"]
+            file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+
+            return jsonify({
+                "file_url": file_url,
+                "content": text,
+                "address": address,
+                "timestamp": timestamp
+            })
+        except:
+            pass
+
+    # ===== ПРОСТО ФОТО =====
     if content and content.startswith("AgAC"):
         try:
             file = requests.get(
@@ -124,16 +145,18 @@ def get_point(pid):
             file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
 
             return jsonify({
-                "content": content,
                 "file_url": file_url,
-                "address": address
+                "address": address,
+                "timestamp": timestamp
             })
         except:
             pass
 
+    # ===== ОБЫЧНЫЙ ТЕКСТ =====
     return jsonify({
         "content": content,
-        "address": address
+        "address": address,
+        "timestamp": timestamp
     })
 
 # ===== УДАЛЕНИЕ =====
