@@ -34,7 +34,7 @@ def init_db():
 
 init_db()
 
-# ===== АДРЕС =====
+# ===== ПОЛУЧЕНИЕ АДРЕСА =====
 def get_address(lat, lon):
     try:
         url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}"
@@ -44,7 +44,7 @@ def get_address(lat, lon):
     except:
         return "Адрес не найден"
 
-# ===== ДОБАВИТЬ ТОЧКУ =====
+# ===== ДОБАВЛЕНИЕ ТОЧКИ =====
 @app.route("/add", methods=["POST"])
 def add_point():
     data = request.json
@@ -134,7 +134,7 @@ def get_point(pid):
         except:
             pass
 
-    # ===== ПРОСТО ФОТО =====
+    # ===== ТОЛЬКО ФОТО =====
     if content and content.startswith("AgAC"):
         try:
             file = requests.get(
@@ -152,14 +152,14 @@ def get_point(pid):
         except:
             pass
 
-    # ===== ОБЫЧНЫЙ ТЕКСТ =====
+    # ===== ТЕКСТ =====
     return jsonify({
         "content": content,
         "address": address,
         "timestamp": timestamp
     })
 
-# ===== УДАЛЕНИЕ =====
+# ===== УДАЛЕНИЕ ТОЧКИ =====
 @app.route("/delete/<int:pid>", methods=["DELETE"])
 def delete_point(pid):
     conn = sqlite3.connect("db.db")
